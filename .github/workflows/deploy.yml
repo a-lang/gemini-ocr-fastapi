@@ -1,0 +1,174 @@
+name: Build and Push Docker Image
+
+# ============================================================================
+# 【觸發條件】
+# ============================================================================
+# - push: 當代碼推送到 master 分支時自動觸發
+# - workflow_dispatch: 允許在 GitHub Actions 頁面手動觸發部署
+# ============================================================================
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# ============================================================================
+# 【環境變數】
+# ============================================================================
+env:
+  IMAGE_NAME: gemini-ocr-fastapi
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      # ----------------------------------------------------------------------
+      # Step : 檢出代碼倉庫
+      # ----------------------------------------------------------------------
+      # 將 GitHub 倉庫的代碼下載到 runner 的工作目錄
+      # 這是後續構建步驟的基礎
+      # ----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------------
+      # Step : 釋放磁盤空間
+      # ----------------------------------------------------------------------
+      # GitHub Actions runner 的磁盤空間有限（約 14GB），為了確保構建過程順利進行，
+      # 需要清理不必要的文件。此步驟會：
+      # - 刪除 .NET SDK（如果不需要）
+      # - 刪除 Android SDK（如果不需要）
+      # - 刪除 GHC（Haskell 編譯器，如果不需要）
+      # - 清理 Docker 系統（鏡像、容器、卷等）
+      # - 顯示磁盤使用情況
+      # 
+      # 注意：docker system prune 有時可能導致不穩定，如果空間足夠可以註解掉
+      # ----------------------------------------------------------------------
+      - name: Free GitHub Actions Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          # 建議：prune 有時會導致不穩，如果空間還夠，可以先註解掉下面這行測試
+          sudo docker system prune -af || true
+          df -h
+
+      # ----------------------------------------------------------------------
+      # Step : 設置 Docker Buildx
+      # ----------------------------------------------------------------------
+      # Docker Buildx 是 Docker 的擴展構建工具，支持：
+      # - 多平台構建（如 linux/amd64, linux/arm64）
+      # - 構建緩存優化
+      # - 並行構建
+      # 
+      # 配置說明：
+      # - image=moby/buildkit:latest: 使用最新版本的 buildkit 作為構建引擎
+      # - platforms: 聲明支持的平台（雖然這裡只構建 arm64，但保留 amd64 以備未來擴展）
+      # ----------------------------------------------------------------------
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+          platforms: linux/amd64,linux/arm64
+
+      # ----------------------------------------------------------------------
+      # Step : 登錄到 Docker Hub Registry
+      # ----------------------------------------------------------------------
+      # 在推送鏡像之前，必須先通過身份驗證登錄到 Docker Hub
+      # 
+      # 認證方式：
+      # # - username/password: 從 GitHub Secrets 中讀取，確保敏感信息不會暴露在代碼中
+      # 
+      # 安全提示：Docker Hub 憑證存儲在 GitHub Variables 與 Secrets 中，名稱為：
+      # - DOCKERHUB_USERNAME (Var)
+      # - DOCKERHUB_TOKEN  (Secret) 註: 使用 Personal Access Token
+      # ----------------------------------------------------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+   
+      # ----------------------------------------------------------------------
+      # Step 5: 構建並推送 Docker 鏡像到 ACR
+      # ----------------------------------------------------------------------
+      # 這是核心構建步驟，負責：
+      # 1. 使用 ./docker/Dockerfile 構建鏡像
+      # 2. 將構建好的鏡像推送到 ACR
+      # 
+      # 配置說明：
+      # - context: 構建上下文目錄（整個倉庫根目錄）
+      # - file: Dockerfile 的路徑
+      # - push: true 表示構建完成後自動推送到 registry
+      # - platforms: linux/arm64 表示構建 ARM64 架構的鏡像（適用於 Apple Silicon 或 ARM 服務器）
+      # - tags: 鏡像標籤，使用 commit SHA 作為版本號，確保每次構建都有唯一標識
+      # 
+      # 緩存策略：
+      # - cache-from: 從 registry 拉取之前的構建緩存，加速構建過程
+      # - cache-to: 將構建緩存推送到 registry，供下次構建使用
+      # - mode=max: 使用最大緩存模式，保存所有構建層
+      # 
+      # 鏡像標籤格式：stktrade.azurecr.io/stk-jixun-model:<commit-sha>
+      # 例如：stktrade.azurecr.io/stk-jixun-model:abc123def456
+      # ----------------------------------------------------------------------
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ github.workspace }}
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ vars.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ vars.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ vars.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+      # ----------------------------------------------------------------------
+      # Step 6: 生成鏡像構建摘要
+      # ----------------------------------------------------------------------
+      # 在 GitHub Actions 的 Summary 頁面生成一個美觀的 Markdown 報告，
+      # 包含：
+      # - 鏡像的完整信息（registry、名稱、標籤）
+      # - 如何手動拉取和運行鏡像的說明
+      # - 本次構建的元數據（commit SHA、workflow run ID）
+      # 
+      # 這個摘要對於：
+      # - 快速查看構建結果
+      # - 手動測試特定版本的鏡像
+      # - 問題排查和版本追蹤
+      # 非常有用
+      # ----------------------------------------------------------------------
+      - name: Image Pull Summary
+        run: |
+          ACR_NAME="${{ env.ACR_NAME }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          IMAGE_TAG="${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${{ github.sha }}"
+          COMMIT_SHA="${{ github.sha }}"
+          RUN_ID="${{ github.run_id }}"
+          echo "## 🐳 Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** \`${ACR_NAME}.azurecr.io\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Name:** \`${IMAGE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** \`${COMMIT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Full Image:** \`${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### How to Pull This Image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Login to ACR:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "az acr login --name ${ACR_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Pull the image:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Run the container:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -d -p 8000:8000 ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit SHA:** \`${COMMIT_SHA}\` | **Workflow Run:** \`${RUN_ID}\`" >> $GITHUB_STEP_SUMMARY
