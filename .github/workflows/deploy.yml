@@ -72,6 +72,11 @@ jobs:
             image=moby/buildkit:latest
           platforms: linux/amd64,linux/arm64
 
+      - name: Test for Variables
+        run: |
+          echo "vars.DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}"
+          echo "secrets.DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}"
+
       # ----------------------------------------------------------------------
       # Step : 登錄到 Docker Hub Registry
       # ----------------------------------------------------------------------
