@@ -1,0 +1,11 @@
+on:
+  workflow_dispatch:
+
+jobs:  
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Use Variable and Secret
+        run: |
+          echo "vars.DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}"
+          echo "secrets.DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}"
