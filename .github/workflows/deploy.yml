@@ -142,7 +142,7 @@ jobs:
         run: |
           DOCKERHUB_NAME="${{ vars.DOCKERHUB_USERNAME }}"
           IMAGE_NAME="${{ env.IMAGE_NAME }}"
-          IMAGE_TAG="${DOCKERHUB_NAME}.azurecr.io/${IMAGE_NAME}:${{ github.sha }}"
+          IMAGE_TAG="${DOCKERHUB_NAME}/${IMAGE_NAME}:${{ github.sha }}"
           COMMIT_SHA="${{ github.sha }}"
           RUN_ID="${{ github.run_id }}"
           echo "## 🐳 Image Build Summary" >> $GITHUB_STEP_SUMMARY
@@ -155,19 +155,19 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### How to Pull This Image" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. **Login to ACR:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Login to Docker Hub:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "az acr login --name ${ACR_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "docker login -u ${DOCKERHUB_NAME}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "2. **Pull the image:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${DOCKERHUB_NAME}/${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "3. **Run the container:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -d -p 8000:8000 ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -d  -e "GOOGLE_API_KEY=你的金鑰" -p 8000:8000 ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
