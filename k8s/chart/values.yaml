@@ -1,0 +1,97 @@
+# Default values for llama-api
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nameOverride: "gemini-ocr-api"
+fullnameOverride: "gemini-ocr-api"
+
+namespace: my-devops-prod
+
+replicas: 2
+
+# Node selector to ensure pods are scheduled on arm64 nodes
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+strategy:
+  type: RollingUpdate
+
+imagePullSecrets:
+  - dockerhub-pull-secret
+
+image:
+  repository: alangtw/gemini-ocr-fastapi
+  tag: latest
+
+containerName: ocr-extraction-api
+
+# Runtime class for GPU support (e.g., "nvidia")
+# NOTE: This requires NVIDIA Container Runtime to be installed on the nodes
+# and the runtime class to be created in the cluster
+#runtimeClassName: nvidia
+
+
+# Secret configuration for sensitive values
+secret:
+  # Set to true if you want Helm to create the secret
+  # Set to false if you manage the secret externally (e.g., via kubectl or external-secrets)
+  create: true
+  name: gemini-ocr-api-secret
+  # Environment variables to load from secret
+  # Format: ENV_VAR_NAME: secret_key_name
+  # If env var name and secret key are the same, use: ENV_VAR_NAME: ENV_VAR_NAME
+  # To add more: just add new lines like "ANOTHER_KEY: ANOTHER_KEY"
+  # To remove: delete the line
+  envVars:
+    API_KEY: API_KEY
+    GEMINI_API_KEY: GEMINI_API_KEY
+  # Secret stringData (plain text values, Kubernetes will auto-encode to base64)
+  # Only used if secret.create is true
+  # Use plain text values here, no need to base64 encode manually
+  # Example: API_KEY: "your-actual-api-key-value"
+  stringData:
+    API_KEY: ""  # Set this value if secret.create is true (plain text)
+    GEMINI_API_KEY: ""  # Set this value if secret.create is true (plain text)
+
+env:
+  # Non-sensitive environment variables
+  #CLEAR_UPLOAD_AFTER_OUTPUT: "1"
+  #FLASK_ENV: production
+  #LLAMA_MODEL: llama3:8B
+  #LOG_DIR: /app/logs
+  #OLLAMA_API_URL: http://ollama.ollama.svc.cluster.local:11434
+  #OUTPUT_DIR: /app/output
+  #UPLOAD_DIR: /app/uploads
+
+service:
+  port: 8000
+
+# Health check configuration
+healthCheck:
+  enabled: true
+  path: /health
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+resources: {}
+  # limits:
+  #   cpu: 2000m
+  #   memory: 2Gi
+  # requests:
+  #   cpu: 1000m
+  #   memory: 1Gi
+
+# GPU configuration
+gpu:
+  enabled: false
+  count: 1
+
+nodePort: 30081

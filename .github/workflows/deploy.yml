@@ -172,3 +172,75 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "**Commit SHA:** \`${COMMIT_SHA}\` | **Workflow Run:** \`${RUN_ID}\`" >> $GITHUB_STEP_SUMMARY
+
+jobs:
+  # ==========================================================================
+  # Job 2: 使用 Helm 部署到 Kubernetes 集群
+  # ==========================================================================
+  # 此 job 負責：
+  # 1. 等待 build-and-deploy job 完成（確保鏡像已構建並推送）
+  # 2. 通過 SSH 連接到 Azure Bastion 主機
+  # 3. 在 Bastion 主機上執行 Helm 部署命令
+  # 4. 更新 Kubernetes 集群中的應用程序
+  # 
+  # 為什麼需要通過 Bastion？
+  # - 安全考慮：Kubernetes 集群不直接暴露在公網
+  # - 網絡隔離：只有通過 Bastion 才能訪問集群
+  # - 權限控制：Bastion 作為跳板機，集中管理訪問權限
+  # 
+  # 部署流程：
+  # GitHub Actions → SSH to Bastion → Execute Helm Upgrade → K8s Cluster Updated
+  # ==========================================================================
+  helm-deploy:
+    # 確保在 build-and-push job 成功完成後才執行
+    needs: build-and-push
+    
+    # 使用可重用的 Helm 部署 workflow
+    # 這個 workflow 定義在 ./.github/workflows/helm-deploy-reusable.yml
+    # 採用可重用 workflow 的好處：
+    # - 代碼復用：多個項目可以共享相同的部署邏輯
+    # - 易於維護：部署邏輯集中管理，修改一處即可影響所有使用它的 workflow
+    # - 標準化：確保所有項目的部署流程一致
+    uses: ./.github/workflows/helm-deploy-reusable.yml
+    
+    # ========================================================================
+    # 【輸入參數】
+    # ========================================================================
+    # 這些參數會傳遞給可重用 workflow，用於配置部署行為
+    # 
+    # - repo_path: 在 Bastion 主機上的倉庫路徑（用於拉取最新代碼或配置）
+    # - helm_release: Helm release 名稱，用於標識和管理部署的應用
+    # - helm_namespace: Kubernetes namespace，用於隔離不同環境的資源
+    #   （stktrade-prod 表示生產環境）
+    # - helm_chart_path: Helm chart 的本地路徑（在 Bastion 主機上）
+    # - helm_values_file: Helm values 文件路徑，包含部署配置（如資源限制、環境變數等）
+    # - kubeconfig_path: Kubernetes 配置文件路徑，用於認證和連接到集群
+    # - helm_set_values: 動態設置的 Helm values
+    #   image.tag=${{ github.sha }} 表示使用本次構建的鏡像版本（commit SHA）
+    #   這確保部署的是剛剛構建好的鏡像
+    # ========================================================================
+    with:
+      repo_path: /home/alang/gemini-ocr-fastapi
+      helm_release: gemini-ocr
+      helm_namespace: my-devops-prod
+      helm_chart_path: ~/gemini-ocr-fastapi/k8s/chart
+      helm_values_file: ~/gemini-ocr-fastapi/k8s/chart/values.yaml
+      kubeconfig_path: ~/my.kubeconfig
+      helm_set_values: image.tag=${{ github.sha }}
+    
+    # ========================================================================
+    # 【SSH 認證信息】
+    # ========================================================================
+    # 這些 secrets 存儲在 GitHub Secrets 中，用於 SSH 連接到 Bastion 主機
+    # 
+    # - SSH_PRIVATE_KEY: SSH 私鑰，用於身份驗證
+    # - SSH_HOST: Bastion 主機的 IP 地址或域名
+    # - SSH_USER: SSH 登錄用戶名
+    # 
+    # 安全提示：
+    # - 所有敏感信息都存儲在 GitHub Secrets 中，不會暴露在代碼中
+    # ========================================================================
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.MY_BASTION_KEY }}
+      SSH_HOST: ${{ secrets.MY_BASTION_HOST }}
+      SSH_USER: ${{ secrets.MY_BASTION_USERNAME }}  

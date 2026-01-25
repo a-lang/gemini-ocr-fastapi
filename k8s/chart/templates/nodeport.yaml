@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: {{ .Values.fullnameOverride }}-nodeport
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}          # Port exposed within the cluster
+      targetPort: {{ .Values.service.port }}     # Port on the pods
+      nodePort: {{ .Values.nodePort }}           # Port accessible externally on each node
+      protocol: TCP
+  selector:
+    {{- include "chart.selectorLabels" . | nindent 4 }}

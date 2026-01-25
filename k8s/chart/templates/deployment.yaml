@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: {{ include "chart.fullname" . }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "chart.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+  template:
+    metadata:
+      labels:
+        {{- include "chart.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.runtimeClassName }}
+      runtimeClassName: {{ .Values.runtimeClassName }}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.gpu.enabled }}
+      volumes:
+        - name: nvidia-smi
+          hostPath:
+            path: /usr/bin/nvidia-smi
+            type: File
+      {{- end }}
+      containers:
+        - env:
+            {{- $secretKeys := dict }}
+            {{- if and .Values.secret .Values.secret.envVars }}
+            {{- range $envVar, $secretKey := .Values.secret.envVars }}
+            {{- $_ := set $secretKeys $envVar true }}
+            {{- end }}
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            {{- if not (hasKey $secretKeys $key) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if and .Values.secret .Values.secret.envVars }}
+            {{- range $envVar, $secretKey := .Values.secret.envVars }}
+            - name: {{ $envVar }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secret.name }}
+                  key: {{ $secretKey }}
+            {{- end }}
+            {{- end }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          name: {{ .Values.containerName }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- if .Values.healthCheck.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.healthCheck.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthCheck.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthCheck.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthCheck.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthCheck.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.healthCheck.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthCheck.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthCheck.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthCheck.readinessProbe.failureThreshold }}
+          {{- end }}
+          #command: ["python", "-m", "gunicorn"]
+          #args: ["app.main:app", "-k", "gthread", "--bind", "0.0.0.0:8000", "--workers", "4", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+          {{- if .Values.gpu.enabled }}
+          volumeMounts:
+            - name: nvidia-smi
+              mountPath: /usr/bin/nvidia-smi
+              readOnly: true
+          {{- end }}
+          # {{- if or .Values.resources .Values.gpu.enabled }}
+          # resources:
+          #   {{- if .Values.resources }}
+          #   {{- if .Values.resources.limits }}
+          #   limits:
+          #     {{- toYaml .Values.resources.limits | nindent 14 }}
+          #     {{- if .Values.gpu.enabled }}
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #     {{- end }}
+          #   {{- else if .Values.gpu.enabled }}
+          #   limits:
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #   {{- end }}
+          #   {{- if .Values.resources.requests }}
+          #   requests:
+          #     {{- toYaml .Values.resources.requests | nindent 14 }}
+          #     {{- if .Values.gpu.enabled }}
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #     {{- end }}
+          #   {{- else if .Values.gpu.enabled }}
+          #   requests:
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #   {{- end }}
+          #   {{- else if .Values.gpu.enabled }}
+          #   limits:
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #   requests:
+          #     nvidia.com/gpu: {{ .Values.gpu.count | default 1 }}
+          #   {{- end }}
+          # {{- end }}
+      restartPolicy: Always
+
