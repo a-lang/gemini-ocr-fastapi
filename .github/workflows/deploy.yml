@@ -7,9 +7,9 @@ name: Build and Push Docker Image
 # - workflow_dispatch: 允許在 GitHub Actions 頁面手動觸發部署
 # ============================================================================
 on:
-# push:
-#   branches:
-#     - main
+  #push:
+  #  branches:
+  #    - main
   workflow_dispatch:
 
 # ============================================================================
@@ -157,7 +157,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "1. **Login to Docker Hub:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker login -u ${DOCKERHUB_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "docker login -u  >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "2. **Pull the image:**" >> $GITHUB_STEP_SUMMARY
@@ -167,7 +167,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "3. **Run the container:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -d  -e "GOOGLE_API_KEY=你的金鑰" -p 8000:8000 ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -d -e \"GOOGLE_API_KEY=你的金鑰\" -p 8000:8000 ${IMAGE_TAG}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
