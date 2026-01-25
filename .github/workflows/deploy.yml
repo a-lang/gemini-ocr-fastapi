@@ -157,7 +157,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "1. **Login to Docker Hub:**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker login -u  >> $GITHUB_STEP_SUMMARY
+          echo "docker login -u"  >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "2. **Pull the image:**" >> $GITHUB_STEP_SUMMARY
